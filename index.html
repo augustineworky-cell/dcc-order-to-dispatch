@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DCC Order to Dispatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- LOGIN -->
+<section id="login" class="hidden">
+<div class="lg">
+  <div style="display:flex;flex-direction:column;padding:36px 64px">
+    <div class="row rise" style="--i:0"><div style="width:34px;height:34px;border-radius:10px;background:var(--ink);display:grid;place-items:center;color:#fff;font:400 20px 'Instrument Serif',serif">D</div><b style="font-weight:600">Order to Dispatch</b></div>
+    <form id="loginForm" style="margin:auto 0;max-width:380px;width:100%">
+      <div class="rise" style="--i:1"><span class="chip c-done"><span class="pdot"></span> All systems running</span></div>
+      <h1 class="h1 rise" style="--i:2;margin-top:18px;font-size:54px">Welcome<br>back<span class="caret"></span></h1>
+      <p class="sub rise" style="--i:3">Sign in to track every order from PO to copy received, for Okhla and Gurgaon.</p>
+      <div class="grid" style="gap:16px;margin-top:28px">
+        <label class="f rise" style="--i:4">Work email<input class="inp" id="email" type="email" required autocomplete="username" style="height:44px"></label>
+        <label class="f rise" style="--i:5">Password<input class="inp" id="password" type="password" required autocomplete="current-password" style="height:44px"></label>
+        <div class="err" id="loginErr"></div>
+        <button class="btn rise beam" type="submit" style="--i:6;height:46px;justify-content:center;font-size:14.5px;border-radius:12px">Sign in →</button>
+      </div>
+      <p class="mut rise" style="--i:7;font-size:12.5px;margin-top:18px">Trouble signing in? Ask the admin to reset your password.</p>
+    </form>
+    <div class="mut" style="font-size:12px">© DCC Supply Chain &amp; Distribution LLP · Merry Christmas 🎄</div>
+  </div>
+  <div class="pn2"><div class="dots" style="position:absolute;inset:0"></div><div class="snow"></div>
+    <div style="position:relative;width:100%;max-width:470px">
+      <div class="card beam flat rise" style="--i:1;padding:22px;border-radius:18px;box-shadow:0 30px 60px -30px rgba(0,0,0,.25);overflow:visible">
+        <div class="row" style="justify-content:space-between"><div><div class="mono mut">SO 37360 · Gurgaon</div><div style="font-weight:600;font-size:16px;margin-top:2px">RAMESH LAL</div></div><span class="chip c-act">In progress</span></div>
+        <div class="grid" style="gap:8px;margin-top:18px">
+          <div class="node" style="--i:0"><span class="n" style="--i:0">1</span>Sales order<span class="who">Sales desk</span></div>
+          <div class="node" style="--i:1"><span class="n" style="--i:1">2</span>Invoice<span class="who">Accounts</span></div>
+          <div class="node" style="--i:2"><span class="n" style="--i:2">3</span>E-way bill<span class="who">Accounts</span></div>
+          <div class="node" style="--i:3"><span class="n" style="--i:3">4</span>Dispatch<span class="who">Warehouse</span></div>
+          <div class="node" style="--i:4"><span class="n" style="--i:4">5</span>Receiving + stamp<span class="who">Delivery</span></div>
+          <div class="node" style="--i:5"><span class="n" style="--i:5;animation:none">6</span>Credit note · GRN · handover…<span class="who">5 more</span></div>
+        </div></div>
+      <p class="serif rise" style="--i:4;font-size:30px;line-height:1.15;margin:28px 6px 0">Every order, every step,<br><i>on time.</i></p>
+    </div></div>
+</div>
+</section>
+
+<section id="noaccess" class="center hidden">
+  <div class="card flat" style="max-width:420px;padding:28px;display:grid;gap:14px">
+    <h1 class="h1">Almost there</h1>
+    <p class="sub" style="margin:0">You are signed in, but your account has no access yet. Ask the admin to add you. Your user id:</p>
+    <code id="uid" class="mono" style="background:var(--bg2);border:1px solid var(--line);padding:10px;border-radius:10px;word-break:break-all;user-select:all"></code>
+    <button class="btn sec" id="noaccessOut" style="justify-content:center">Sign out</button>
+  </div>
+</section>
+
+<!-- APP -->
+<div id="app" class="app hidden">
+  <aside class="sb" id="sb"></aside>
+  <div class="main"><div class="topbar" id="topbar"></div><div class="content" id="view"></div></div>
+</div>
+<div id="toast" class="toast hidden"></div>
+<div id="lights" style="display:none"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
