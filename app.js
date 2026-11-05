@@ -278,14 +278,16 @@ function stepHtml(ord, s, dl, i) {
   const isCur = ord.status === 'active' && ord.current_step === s.step_no && s.state === 'pending';
   const cls = isCur ? 'cur' : (s.state === 'pending' || s.state === 'not_required') ? 'todo' : '';
   const data = Object.entries(s.data || {}).filter(([, x]) => x !== '' && x != null && x !== false);
-  const meta = s.state === 'done' ? `${fmtDate(s.actual_at)}${s.done_by_name ? ' · ' + esc(s.done_by_name) : ''}` : s.state === 'inferred' ? `Done${s.actual_at ? ' · ' + fmtDate(s.actual_at) : ''} (from old sheet)` : s.state === 'not_required' ? 'Not required' : (s.planned_at ? 'Planned ' + fmtDate(s.planned_at) : 'Pending');
+  const _p = s.planned_at ? new Date(s.planned_at).getTime() : null, _a = s.actual_at ? new Date(s.actual_at).getTime() : null;
+  const _res = s.state === 'done' && _p && _a ? (_a <= _p ? ' <span class="chip c-done">On time</span>' : ` <span class="chip c-late">Late ${dur(_a - _p)}</span>`) : (s.state === 'pending' && _p ? (_p < Date.now() ? ` <span class="chip c-late">Late ${dur(Date.now() - _p)}</span>` : ` <span class="chip c-act">Due in ${dur(_p - Date.now())}</span>`) : '');
+  const meta = s.state === 'not_required' ? 'Not required for this order' : `<div style="text-align:right;line-height:1.7"><div><span class="mut">Who</span> <b style="font-weight:600">${esc(ownerOf(ord.location, s.step_no))}</b></div><div><span class="mut">Planned</span> ${s.planned_at ? fmtDate(s.planned_at) : 'not set'}</div><div><span class="mut">${s.state === 'pending' ? 'Not done yet' : 'Done'}</span>${s.state !== 'pending' ? ' ' + (s.actual_at ? fmtDate(s.actual_at) : '—') + (s.done_by_name ? ' · by <b style="font-weight:600">' + esc(s.done_by_name) + '</b>' : s.state === 'inferred' ? ' · old sheet' : '') : ''}${_res}</div></div>`;
   let form = '';
   if (isCur && canDo(ord.location, s.step_no) && STEP_FIELDS[s.step_no]) {
     form = `<div class="card beam flat" style="margin-top:12px;padding:16px;border-radius:14px;overflow:visible"><div class="grid" style="gap:12px" id="f${s.step_no}">${STEP_FIELDS[s.step_no].map(([k, l, t]) => t === 'check' ? `<label class="row" style="font-size:13px"><input type="checkbox" data-k="${k}" style="width:auto;height:auto"> ${l}</label>` : `<label class="f">${l}<input class="inp" data-k="${k}" type="${t || 'text'}" ${k === 'drive_url' ? 'placeholder="https://drive.google.com/open?id=…"' : ''}></label>`).join('')}
     <div class="row" style="justify-content:flex-end"><button class="btn red" data-done="${s.step_no}">Mark step ${s.step_no} done →</button></div></div></div>`;
   } else if (isCur) form = '<div class="mut" style="font-size:12.5px;margin-top:6px">Waiting on the step owner.</div>';
   return `<div class="st ${cls}" style="--i:${i}"><div class="dot">${['done', 'inferred'].includes(s.state) ? '✓' : s.state === 'not_required' ? '–' : s.step_no}</div><div>
-  <div class="row" style="justify-content:space-between"><b style="font-weight:600">${esc(stepName(s.step_no))}</b><span class="mut" style="font-size:12.5px">${meta}</span></div>
+  <div class="row" style="justify-content:space-between;align-items:flex-start"><b style="font-weight:600">${esc(stepName(s.step_no))}</b><span style="font-size:12.5px">${meta}</span></div>
   ${data.length ? `<div class="row" style="margin-top:7px;flex-wrap:wrap;gap:6px">${data.map(([k, x]) => `<span class="tag">${esc(k.replace(/_/g, ' '))}: ${esc(x === true ? 'yes' : x)}</span>`).join('')}</div>` : ''}${form}</div></div>`;
 }
 async function completeStep(ord, n, btn) {
