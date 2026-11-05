@@ -36,6 +36,8 @@ const money = v => v == null ? '—' : '₹' + Number(v).toLocaleString('en-IN',
 const stepName = n => (S.steps.find(s => s.step_no === n) || {}).name || ('Step ' + n);
 const locName = c => c === 'okhla' ? 'Okhla' : c === 'gurgaon' ? 'Gurgaon' : c;
 const rel = d => { if (!d) return 'not set'; const m = Math.round((new Date(d) - Date.now()) / 60000), a = Math.abs(m); const t = a < 60 ? a + 'm' : a < 1440 ? Math.round(a / 60) + 'h' : Math.round(a / 1440) + 'd'; return m < 0 ? 'Late ' + t : 'In ' + t; };
+const dur = ms => { const m = Math.round(Math.abs(ms) / 60000); return m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.floor(m / 1440) + 'd ' + Math.round((m % 1440) / 60) + 'h'; };
+const ownerOf = (loc, n) => ((S.cfg.find(c => c.location === loc && c.step_no === n) || {}).owner_label) || '—';
 const locFilter = q => S.loc === 'all' ? q : q.eq('location', S.loc);
 const chipStatus = o => o.status === 'active' ? `<span class="chip c-act">Step ${o.current_step} · ${esc(stepName(o.current_step))}</span>` : `<span class="chip ${o.status === 'done' ? 'c-done' : 'c-can'}">${o.status}</span>`;
 
@@ -172,21 +174,37 @@ async function dashboard() {
 async function orders() {
   topbar('All orders', canNew() ? '<a class="btn" href="#/new" style="text-decoration:none">+ New order</a>' : '');
   const v = $('#view');
+  const bq = await locFilter(sb.from('orders').select('brand')).limit(5000);
+  const brands = [...new Set((bq.data || []).map(r => r.brand).filter(Boolean))].sort();
   v.innerHTML = `<div class="rise" style="--i:0"><h1 class="h1">All orders</h1><div class="sub" id="osub"></div></div>
   <div class="row rise" style="--i:1;margin:22px 0 14px;flex-wrap:wrap">
     <div class="seg2">${[['', 'All'], ['active', 'Active'], ['done', 'Done'], ['cancelled', 'Cancelled']].map(s => `<button data-st="${s[0]}" class="${S.status === s[0] ? 'on' : ''}">${s[1]}</button>`).join('')}</div>
     <select class="sel" id="fst"><option value="">Any step</option>${S.steps.map(s => `<option value="${s.step_no}" ${String(S.step) === String(s.step_no) ? 'selected' : ''}>${s.step_no}. ${esc(s.name)}</option>`).join('')}</select>
     <select class="sel" id="ft"><option value="">All trade types</option>${TRADES.map(t => `<option ${S.trade === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <select class="sel" id="fbr"><option value="">All brands</option>${brands.map(b => `<option ${S.brand === b ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
+    <select class="sel" id="fgrn"><option value="">GRN: any</option><option value="1" ${S.grn === '1' ? 'selected' : ''}>GRN required</option><option value="0" ${S.grn === '0' ? 'selected' : ''}>No GRN</option></select>
+    <label class="mut" style="font-size:12.5px;display:flex;align-items:center;gap:6px">From <input class="inp" id="ffrom" type="date" style="height:38px;width:150px" value="${S.from || ''}"></label>
+    <label class="mut" style="font-size:12.5px;display:flex;align-items:center;gap:6px">To <input class="inp" id="fto" type="date" style="height:38px;width:150px" value="${S.to || ''}"></label>
+    ${(S.status || S.step || S.trade || S.brand || S.grn || S.from || S.to || S.q) ? '<button class="btn sec" id="fclear" style="height:38px">Clear filters</button>' : ''}
     ${S.q ? `<span class="chip c-step" style="height:38px;padding:0 14px;cursor:pointer" id="clrq">Search: ${esc(S.q)} ✕</span>` : ''}
   </div><div class="card flat rise" style="--i:2" id="otable"><div class="empty">Loading…</div></div>`;
   v.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { S.status = b.dataset.st; S.page = 0; orders(); });
   $('#fst').onchange = e => { S.step = e.target.value; S.page = 0; orders(); };
   $('#ft').onchange = e => { S.trade = e.target.value; S.page = 0; orders(); };
+  $('#fbr').onchange = e => { S.brand = e.target.value; S.page = 0; orders(); };
+  $('#fgrn').onchange = e => { S.grn = e.target.value; S.page = 0; orders(); };
+  $('#ffrom').onchange = e => { S.from = e.target.value; S.page = 0; orders(); };
+  $('#fto').onchange = e => { S.to = e.target.value; S.page = 0; orders(); };
+  if ($('#fclear')) $('#fclear').onclick = () => { S.status = S.step = S.trade = S.brand = S.grn = S.from = S.to = S.q = ''; S.page = 0; orders(); };
   if ($('#clrq')) $('#clrq').onclick = () => { S.q = ''; S.page = 0; orders(); };
   let q = locFilter(sb.from('orders').select('id,location,so_no,received_at,party_name,brand,trade_category,status,current_step,invoice_no,invoice_value', { count: 'exact' }));
   if (S.status) q = q.eq('status', S.status);
   if (S.step) q = q.eq('current_step', +S.step);
   if (S.trade) q = q.eq('trade_category', S.trade);
+  if (S.brand) q = q.eq('brand', S.brand);
+  if (S.grn) q = q.eq('grn_required', S.grn === '1');
+  if (S.from) q = q.gte('received_at', new Date(S.from + 'T00:00:00+05:30').toISOString());
+  if (S.to) q = q.lte('received_at', new Date(S.to + 'T23:59:59+05:30').toISOString());
   if (S.q) { const s = S.q.replace(/[%,()]/g, ' '); q = q.or(`party_name.ilike.%${s}%,invoice_no.ilike.%${s}%,po_number.ilike.%${s}%${/^\d+$/.test(s) ? ',so_no.eq.' + s : ''}`); }
   const { data, count: total, error } = await q.order('received_at', { ascending: false }).range(S.page * PAGE, S.page * PAGE + PAGE - 1);
   const box = $('#otable');
@@ -229,6 +247,7 @@ async function detail(id) {
       ${cur && cur.planned_at ? `<div class="row" style="justify-content:space-between;font-size:12.5px"><span class="mut">Status</span><span class="chip ${new Date(cur.planned_at) < new Date() ? 'c-late' : 'c-done'}">${rel(cur.planned_at)}</span></div>` : ''}</div>
     <div class="card flat rise" style="--i:4;padding:20px"><div style="font-weight:600;margin-bottom:4px">Activity</div>${log.map((l, i) => `<div class="lgi" style="--i:${i}"><span class="pdot" style="margin-top:6px;flex:none;background:${l.action === 'created' ? '#c8102e' : '#0f7b4a'};animation:none"></span><div><div>${l.action === 'created' ? 'Order created' : l.action === 'cancelled' ? 'Order cancelled' : 'Step ' + l.step_no + ' done'}</div><div class="mut" style="font-size:12px">${fmtDate(l.at)}</div></div></div>`).join('') || '<div class="mut" style="font-size:13px;padding-top:8px">No activity logged yet.</div>'}</div>
   </div></div>`;
+  v.insertAdjacentHTML('beforeend', stepTable(ord, steps));
   const btn = v.querySelector('[data-done]');
   if (btn) btn.onclick = () => completeStep(ord, +btn.dataset.done, btn);
   const cb = $('#cancelOrder');
@@ -239,6 +258,21 @@ async function detail(id) {
     if (error) return toast(error.message);
     toast('Order cancelled'); detail(ord.id);
   };
+}
+function stepTable(ord, steps) {
+  const now = Date.now();
+  const rows = steps.map((s, i) => {
+    const p = s.planned_at ? new Date(s.planned_at).getTime() : null, a = s.actual_at ? new Date(s.actual_at).getTime() : null;
+    let res = '<span class="mut">—</span>';
+    if (s.state === 'not_required') res = '<span class="mut">Not required</span>';
+    else if (s.state === 'inferred') res = '<span class="chip c-done">Done (old sheet)</span>';
+    else if (s.state === 'done') res = p && a ? (a <= p ? `<span class="chip c-done">On time</span>` : `<span class="chip c-late">Late ${dur(a - p)}</span>`) : '<span class="chip c-done">Done</span>';
+    else if (p) res = p < now ? `<span class="chip c-late">Late ${dur(now - p)}</span>` : `<span class="chip c-act">Due in ${dur(p - now)}</span>`;
+    else res = '<span class="chip c-step">Not planned</span>';
+    const who = s.state === 'done' && s.done_by_name ? `${esc(ownerOf(ord.location, s.step_no))}<div class="mut" style="font-size:11.5px">done by ${esc(s.done_by_name)}</div>` : esc(ownerOf(ord.location, s.step_no));
+    return `<tr style="--i:${i}${s.state === 'not_required' ? ';opacity:.5' : ''}"><td class="mono">${s.step_no}</td><td style="font-weight:500">${esc(stepName(s.step_no))}</td><td>${who}</td><td class="mono">${fmtDate(s.planned_at)}</td><td class="mono">${s.state === 'done' || s.state === 'inferred' ? fmtDate(s.actual_at) : '—'}</td><td>${res}</td></tr>`;
+  }).join('');
+  return `<div class="card flat rise" style="--i:5;margin-top:16px"><div style="padding:18px 22px;font-weight:600;font-size:15px">Step timeline <span class="mut" style="font-weight:400;font-size:12.5px">· who, planned time, actual time</span></div><table><thead><tr><th>#</th><th>Step</th><th>Owner</th><th>Planned</th><th>Actual</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 function stepHtml(ord, s, dl, i) {
   const isCur = ord.status === 'active' && ord.current_step === s.step_no && s.state === 'pending';
@@ -281,9 +315,17 @@ async function tasks() {
   const cnt = {}; (pipe || []).forEach(r => { if (S.loc === 'all' || r.location === S.loc) cnt[r.step_no] = (cnt[r.step_no] || 0) + r.orders; });
   v.innerHTML = `<div class="rise" style="--i:0"><h1 class="h1">My tasks</h1><div class="sub">What is waiting for you, oldest planned time first.</div></div>
   <div class="row rise" style="--i:1;margin:22px 0 14px;flex-wrap:wrap;gap:6px">${mine.map(k => `<button class="tab ${k === S.taskStep ? 'on' : ''}" data-s="${k}">${k} · ${esc(stepName(k))}<span class="tc">${cnt[k] || 0}</span></button>`).join('')}</div>
-  <div class="card flat rise" style="--i:2" id="tlist"><div class="empty">Loading…</div></div>`;
+  <div class="row rise" style="--i:2;margin-bottom:12px;flex-wrap:wrap"><input class="inp" id="tq" placeholder="Search SO or party…" value="${esc(S.tq || '')}" style="max-width:240px;height:38px"><select class="sel" id="ttr"><option value="">All trade types</option>${TRADES.map(t => `<option ${S.ttr === t ? 'selected' : ''}>${t}</option>`).join('')}</select><div class="seg2"><button data-late="" class="${!S.lateOnly ? 'on' : ''}">All</button><button data-late="1" class="${S.lateOnly ? 'on' : ''}">Late only</button></div></div>
+  <div class="card flat rise" style="--i:3" id="tlist"><div class="empty">Loading…</div></div>`;
+  $('#tq').onkeydown = e => { if (e.key === 'Enter') { S.tq = e.target.value.trim(); tasks(); } };
+  $('#ttr').onchange = e => { S.ttr = e.target.value; tasks(); };
+  v.querySelectorAll('[data-late]').forEach(b => b.onclick = () => { S.lateOnly = b.dataset.late === '1'; tasks(); });
   v.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { S.taskStep = +b.dataset.s; tasks(); });
-  const { data, error } = await locFilter(sb.from('v_tasks').select('*').eq('step_no', S.taskStep)).order('planned_at', { nullsFirst: false }).limit(100);
+  let tq = locFilter(sb.from('v_tasks').select('*').eq('step_no', S.taskStep));
+  if (S.lateOnly) tq = tq.eq('is_late', true);
+  if (S.ttr) tq = tq.eq('trade_category', S.ttr);
+  if (S.tq) { const t = S.tq.replace(/[%,()]/g, ' '); tq = tq.or(`party_name.ilike.%${t}%${/^\d+$/.test(t) ? ',so_no.eq.' + t : ''}`); }
+  const { data, error } = await tq.order('planned_at', { nullsFirst: false }).limit(100);
   const box = $('#tlist');
   if (error) { box.innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
   box.innerHTML = `<div class="tk" style="padding:11px 22px;background:var(--bg2);border-bottom:1px solid var(--line);animation:none;font:500 12px Inter;color:var(--mute)"><span>SO</span><span>Party</span><span>Brand / trade</span><span>Planned</span><span></span></div>${(data || []).map((r, i) => `<div class="tk" style="--i:${i}"><span class="mono">${r.so_no}</span><div><div style="font-weight:500">${esc(r.party_name)}</div><div class="mut" style="font-size:12px">${locName(r.location)}</div></div><span class="mut">${esc(r.brand || '—')} · ${esc(r.trade_category || '—')}</span><span class="chip ${r.is_late ? 'c-late' : r.planned_at ? 'c-act' : 'c-step'}">${r.planned_at ? rel(r.planned_at) : 'not planned'}</span><span class="row" style="justify-content:flex-end"><a class="btn" href="#/orders/${r.order_id}" style="text-decoration:none;height:34px">Open</a></span></div>`).join('') || '<div class="empty">🎁 Nothing waiting for this step.</div>'}`;
@@ -325,11 +367,17 @@ function newOrder() {
 async function returns() {
   topbar('Returns & GRN');
   const v = $('#view');
-  const { data, error } = await locFilter(sb.from('v_tasks').select('*').in('step_no', [6, 7, 8])).order('planned_at', { nullsFirst: false }).limit(300);
+  let rq = locFilter(sb.from('v_tasks').select('*').in('step_no', [6, 7, 8]));
+  if (S.lateOnly) rq = rq.eq('is_late', true);
+  if (S.rq) { const t = S.rq.replace(/[%,()]/g, ' '); rq = rq.or(`party_name.ilike.%${t}%${/^\d+$/.test(t) ? ',so_no.eq.' + t : ''}`); }
+  const { data, error } = await rq.order('planned_at', { nullsFirst: false }).limit(300);
   if (error) { v.innerHTML = `<div class="empty">${esc(error.message)}</div>`; return; }
   const cols = [[6, 'Credit note'], [7, 'GRN pending'], [8, 'Credit note email']];
   v.innerHTML = `<div class="rise" style="--i:0"><h1 class="h1">Returns &amp; GRN</h1><div class="sub">Credit notes, GRN follow-ups and credit note emails in one board.</div></div>
+  <div class="row rise" style="--i:1;margin:18px 0 0;flex-wrap:wrap"><input class="inp" id="rq" placeholder="Search SO or party…" value="${esc(S.rq || '')}" style="max-width:240px;height:38px"><div class="seg2"><button data-rl="" class="${!S.lateOnly ? 'on' : ''}">All</button><button data-rl="1" class="${S.lateOnly ? 'on' : ''}">Late only</button></div></div>
   <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:26px;align-items:start">${cols.map(([n, t], ci) => { const rows = (data || []).filter(r => r.step_no === n); return `<div class="col rise" style="--i:${ci + 1}"><div class="row" style="justify-content:space-between;padding:4px"><b style="font-weight:600">${t}<span class="tc">${rows.length}</span></b><span class="mut" style="font-size:12px">Step ${n}</span></div>${rows.slice(0, 12).map((r, i) => `<a class="cd" href="#/orders/${r.order_id}" style="--i:${i}"><div class="row" style="justify-content:space-between"><span class="mono mut">${r.so_no}</span><span class="chip ${r.is_late ? 'c-late' : r.planned_at ? 'c-act' : 'c-step'}">${r.planned_at ? rel(r.planned_at) : 'not planned'}</span></div><b style="font-weight:600">${esc(r.party_name)}</b><div class="mut" style="font-size:12.5px">${locName(r.location)} · ${esc(r.brand || '')}</div></a>`).join('') || '<div class="empty" style="padding:24px">Nothing here 🎁</div>'}${rows.length > 12 ? `<div class="mut" style="text-align:center;font-size:12.5px">+ ${rows.length - 12} more</div>` : ''}</div>`; }).join('')}</div>`;
+  $('#rq').onkeydown = e => { if (e.key === 'Enter') { S.rq = e.target.value.trim(); returns(); } };
+  v.querySelectorAll('[data-rl]').forEach(b => b.onclick = () => { S.lateOnly = b.dataset.rl === '1'; returns(); });
 }
 
 // ---------- reports ----------
@@ -370,7 +418,7 @@ async function admin() {
   <div class="row rise" style="--i:1;margin:22px 0 14px;gap:6px">${[['users', 'Users'], ['cfg', 'Step owners & TAT'], ['hol', 'Holidays']].map(t => `<button class="tab ${T === t[0] ? 'on' : ''}" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>
   <div class="card flat rise" style="--i:2">${body}</div>`;
   v.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { S.adminTab = b.dataset.t; admin(); });
-  v.querySelectorAll('[data-u]').forEach(b => b.onclick = async () => { const { error } = await sb.from('app_users').update({ active: b.dataset.a !== 'true' }).eq('user_id', b.dataset.u); if (error) toast(error.message); admin(); });
+  v.querySelectorAll('[data-u]').forEach(b => b.onclick = async () => { if (b.dataset.u === S.user.id) return toast('You cannot switch off your own account'); const { error } = await sb.from('app_users').update({ active: b.dataset.a !== 'true' }).eq('user_id', b.dataset.u); if (error) toast(error.message); admin(); });
   if ($('#hadd')) $('#hadd').onclick = async () => { const d = $('#hd').value; if (!d) return toast('Pick a date'); const { error } = await sb.from('holidays').upsert({ day: d, name: $('#hn').value.trim() || null }); if (error) toast(error.message); admin(); };
   v.querySelectorAll('[data-hd]').forEach(b => b.onclick = async () => { await sb.from('holidays').delete().eq('day', b.dataset.hd); admin(); });
 }
