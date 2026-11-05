@@ -28,6 +28,7 @@ const STEP_FIELDS = {
   10: [['received_by', 'Received by']]
 };
 const TRADES = ['Modern Trade', 'General Trade', 'DCC Transfer', 'Sample', 'Distributor'];
+const CHANNELS = ['Email', 'WhatsApp', 'Phone'];
 
 const fmtDate = d => d ? new Date(d).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 const fmtDay = d => d ? new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric' }) : '—';
@@ -213,10 +214,10 @@ async function detail(id) {
   const reqDone = steps.filter(s => s.required && ['done', 'inferred'].includes(s.state)).length, reqAll = steps.filter(s => s.required).length;
   const cur = steps.find(s => s.step_no === ord.current_step && ord.status === 'active');
   v.innerHTML = `
-  <div class="row rise" style="--i:0;justify-content:space-between;align-items:flex-end"><div><div class="mono mut">${locName(ord.location)} · SO ${ord.so_no}${ord.po_number ? ' · PO ' + esc(ord.po_number) : ''}</div><h1 class="h1" style="margin-top:6px">${esc(ord.party_name)}</h1></div><span style="font-size:13px">${chipStatus(ord)}</span></div>
+  <div class="row rise" style="--i:0;justify-content:space-between;align-items:flex-end"><div><div class="mono mut">${locName(ord.location)} · SO ${ord.so_no}${ord.po_number ? ' · PO ' + esc(ord.po_number) : ''}</div><h1 class="h1" style="margin-top:6px">${esc(ord.party_name)}</h1></div><span class="row" style="font-size:13px">${chipStatus(ord)}${ord.status === 'active' && canDo(ord.location, 1) ? '<button class="btn sec" id="cancelOrder" style="height:32px;color:var(--red)">Cancel order</button>' : ''}</span></div>
   <div class="grid" style="grid-template-columns:minmax(0,300px) minmax(0,1fr) minmax(0,300px);margin-top:24px;align-items:start">
   <div style="display:flex;flex-direction:column;gap:16px">
-    <div class="card flat rise" style="--i:1;padding:20px"><div style="font-weight:600;margin-bottom:14px">Order</div><dl class="kv" style="margin:0"><dt>Brand</dt><dd>${esc(ord.brand || '—')}</dd><dt>Trade</dt><dd>${esc(ord.trade_category || '—')}</dd><dt>PO received</dt><dd>${fmtDate(ord.received_at)}</dd><dt>Delivery to</dt><dd>${esc(ord.party_location || '—')}</dd><dt>Invoice</dt><dd class="mono">${esc(ord.invoice_no || '—')}</dd><dt>Value</dt><dd class="mono">${money(ord.invoice_value)}</dd><dt>GRN needed</dt><dd>${ord.grn_required ? 'Yes' : 'No'}${ord.is_d2c ? ' · D2C' : ''}</dd><dt>Delivery TAT</dt><dd>${ord.delivery_days ?? '—'} day(s)</dd></dl></div>
+    <div class="card flat rise" style="--i:1;padding:20px"><div style="font-weight:600;margin-bottom:14px">Order</div><dl class="kv" style="margin:0"><dt>Brand</dt><dd>${esc(ord.brand || '—')}</dd><dt>Trade</dt><dd>${esc(ord.trade_category || '—')}</dd><dt>PO received</dt><dd>${fmtDate(ord.received_at)}</dd><dt>Received via</dt><dd>${esc(ord.order_channel || '—')}</dd><dt>Party location</dt><dd>${esc(ord.party_location || '—')}</dd><dt>Invoice</dt><dd class="mono">${esc(ord.invoice_no || '—')}</dd><dt>Value</dt><dd class="mono">${money(ord.invoice_value)}</dd><dt>GRN needed</dt><dd>${ord.grn_required ? 'Yes' : 'No'}${ord.is_d2c ? ' · D2C' : ''}</dd><dt>Delivery TAT</dt><dd>${ord.delivery_days ?? '—'} day(s)</dd></dl></div>
     <div class="card flat rise" style="--i:2;padding:20px"><div class="row" style="justify-content:space-between;margin-bottom:12px"><b style="font-weight:600">Documents</b><span class="kbd">Google Drive</span></div>
     ${dl.map(d => `<a href="${esc(d.drive_url)}" target="_blank" rel="noopener" class="row" style="padding:9px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;text-decoration:none;color:var(--ink);font-size:13px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9zM14 3v6h6"></path></svg>${esc(d.kind.replace(/_/g, ' '))}<span style="margin-left:auto;color:var(--mute)">↗</span></a>`).join('') || '<div class="mut" style="font-size:13px">No documents yet.</div>'}</div></div>
   <div class="card flat rise" style="--i:2;padding:24px 26px"><div class="row" style="justify-content:space-between;margin-bottom:20px"><div style="font-weight:600;font-size:15px">Progress</div><span class="mut" style="font-size:12.5px">${reqDone} of ${reqAll} required steps done</span></div>
@@ -226,10 +227,18 @@ async function detail(id) {
       <div class="row" style="justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line2)"><span class="mut">Current step</span><span>${cur ? esc(stepName(cur.step_no)) : '—'}</span></div>
       <div class="row" style="justify-content:space-between;padding:10px 0"><span class="mut">Planned</span><span class="mono">${cur ? fmtDate(cur.planned_at) : '—'}</span></div>
       ${cur && cur.planned_at ? `<div class="row" style="justify-content:space-between;font-size:12.5px"><span class="mut">Status</span><span class="chip ${new Date(cur.planned_at) < new Date() ? 'c-late' : 'c-done'}">${rel(cur.planned_at)}</span></div>` : ''}</div>
-    <div class="card flat rise" style="--i:4;padding:20px"><div style="font-weight:600;margin-bottom:4px">Activity</div>${log.map((l, i) => `<div class="lgi" style="--i:${i}"><span class="pdot" style="margin-top:6px;flex:none;background:${l.action === 'created' ? '#c8102e' : '#0f7b4a'};animation:none"></span><div><div>${l.action === 'created' ? 'Order created' : 'Step ' + l.step_no + ' done'}</div><div class="mut" style="font-size:12px">${fmtDate(l.at)}</div></div></div>`).join('') || '<div class="mut" style="font-size:13px;padding-top:8px">No activity logged yet.</div>'}</div>
+    <div class="card flat rise" style="--i:4;padding:20px"><div style="font-weight:600;margin-bottom:4px">Activity</div>${log.map((l, i) => `<div class="lgi" style="--i:${i}"><span class="pdot" style="margin-top:6px;flex:none;background:${l.action === 'created' ? '#c8102e' : '#0f7b4a'};animation:none"></span><div><div>${l.action === 'created' ? 'Order created' : l.action === 'cancelled' ? 'Order cancelled' : 'Step ' + l.step_no + ' done'}</div><div class="mut" style="font-size:12px">${fmtDate(l.at)}</div></div></div>`).join('') || '<div class="mut" style="font-size:13px;padding-top:8px">No activity logged yet.</div>'}</div>
   </div></div>`;
   const btn = v.querySelector('[data-done]');
   if (btn) btn.onclick = () => completeStep(ord, +btn.dataset.done, btn);
+  const cb = $('#cancelOrder');
+  if (cb) cb.onclick = async () => {
+    if (!confirm('Cancel SO ' + ord.so_no + ' for ' + ord.party_name + '? This cannot be undone.')) return;
+    const reason = prompt('Reason for cancelling (optional):') || '';
+    const { error } = await sb.rpc('cancel_order', { p_order: ord.id, p_reason: reason });
+    if (error) return toast(error.message);
+    toast('Order cancelled'); detail(ord.id);
+  };
 }
 function stepHtml(ord, s, dl, i) {
   const isCur = ord.status === 'active' && ord.current_step === s.step_no && s.state === 'pending';
@@ -290,17 +299,23 @@ function newOrder() {
   <div class="grid" style="grid-template-columns:minmax(0,1fr) minmax(0,340px);margin-top:24px;align-items:start">
   <div class="card flat rise" style="--i:1;padding:26px"><div class="grid" style="gap:20px">
     <div><div class="mut" style="font-size:12.5px;font-weight:500;margin-bottom:8px">Location</div><div class="tg" id="nloc">${locs.map(l => `<button data-l="${l}" class="${l === loc ? 'on' : ''}">${locName(l)}</button>`).join('')}</div></div>
-    <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px"><label class="f">Party name<input class="inp" id="n_party"></label><label class="f">Brand<input class="inp" id="n_brand" placeholder="Dairy / Ice cream"></label><label class="f">PO number<input class="inp mono" id="n_po"></label><label class="f">Delivery location<input class="inp" id="n_loc"></label></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px"><label class="f">SO number (from Tally)<input class="inp mono" id="n_so" type="number" placeholder="e.g. 88150"></label><label class="f">PO received at<input class="inp" id="n_at" type="datetime-local"></label><label class="f">Party / store name<input class="inp" id="n_party"></label><label class="f">Brand<input class="inp" id="n_brand" placeholder="Dairy / Ice cream"></label><label class="f">PO number<input class="inp mono" id="n_po"></label><label class="f">Party location<input class="inp" id="n_loc"></label></div>
+    <div><div class="mut" style="font-size:12.5px;font-weight:500;margin-bottom:8px">Order received via</div><div class="tg" id="nchan">${CHANNELS.map((c, i) => `<button data-c="${i}" class="${i === 0 ? 'on' : ''}">${c}</button>`).join('')}</div></div>
     <div><div class="mut" style="font-size:12.5px;font-weight:500;margin-bottom:8px">Trade category</div><div class="tg" id="ntrade">${TRADES.map((t, i) => `<button data-t="${i}" class="${i === trade ? 'on' : ''}">${t}</button>`).join('')}</div></div>
     <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:16px"><label class="f">Delivery days<input class="inp" id="n_days" type="number" value="1" step="0.5"></label><label class="f">GRN required<select class="inp" id="n_grn"><option value="0">No</option><option value="1">Yes</option></select></label><label class="f">D2C order<select class="inp" id="n_d2c"><option value="0">No</option><option value="1">Yes</option></select></label></div>
     <div class="err" id="nerr"></div>
     <div class="row" style="justify-content:flex-end"><a class="btn sec" href="#/orders" style="text-decoration:none">Cancel</a><button class="btn red" id="ncreate">Create order →</button></div></div></div>
-  <div class="card beam flat rise" style="--i:2;padding:22px;border-radius:14px;overflow:visible"><div style="font-weight:600">What happens next</div><div class="ink2" style="font-size:13px;line-height:1.7;margin-top:8px">1. The order gets the next SO number.<br>2. All 10 steps are created and step 1 is marked done.<br>3. The invoice owner sees it in My tasks.</div></div></div>`;
-  $('#nloc').onclick = e => { const b = e.target.closest('button'); if (!b) return; loc = b.dataset.l; $('#nloc').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
+  <div class="card beam flat rise" style="--i:2;padding:22px;border-radius:14px;overflow:visible"><div style="font-weight:600">What happens next</div><div class="ink2" style="font-size:13px;line-height:1.7;margin-top:8px">1. Enter the SO number from Tally (the next free number is filled in for you).<br>2. All 10 steps are created and step 1 is marked done.<br>3. The invoice owner sees it in My tasks.</div></div></div>`;
+  const now = new Date(); now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); $('#n_at').value = now.toISOString().slice(0, 16);
+  let chan = 0;
+  async function suggestSO() { const { data } = await sb.from('orders').select('so_no').eq('location', loc).order('so_no', { ascending: false }).limit(1); $('#n_so').value = data && data[0] ? Number(data[0].so_no) + 1 : ''; }
+  suggestSO();
+  $('#nchan').onclick = e => { const b = e.target.closest('button'); if (!b) return; chan = +b.dataset.c; $('#nchan').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
+  $('#nloc').onclick = e => { const b = e.target.closest('button'); if (!b) return; loc = b.dataset.l; $('#nloc').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); suggestSO(); };
   $('#ntrade').onclick = e => { const b = e.target.closest('button'); if (!b) return; trade = +b.dataset.t; $('#ntrade').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
   $('#ncreate').onclick = async () => {
     $('#nerr').textContent = ''; const btn = $('#ncreate'); btn.disabled = true;
-    const { data, error } = await sb.rpc('create_order', { p_location: loc, p_party: $('#n_party').value, p_brand: $('#n_brand').value, p_party_location: $('#n_loc').value, p_po: $('#n_po').value, p_trade: TRADES[trade], p_grn: $('#n_grn').value === '1', p_days: +$('#n_days').value || null, p_d2c: $('#n_d2c').value === '1' });
+    const { data, error } = await sb.rpc('create_order', { p_location: loc, p_so_no: +$('#n_so').value || null, p_channel: CHANNELS[chan], p_received_at: $('#n_at').value ? new Date($('#n_at').value).toISOString() : null, p_party: $('#n_party').value, p_brand: $('#n_brand').value, p_party_location: $('#n_loc').value, p_po: $('#n_po').value, p_trade: TRADES[trade], p_grn: $('#n_grn').value === '1', p_days: +$('#n_days').value || null, p_d2c: $('#n_d2c').value === '1' });
     if (error) { btn.disabled = false; $('#nerr').textContent = error.message; return; }
     toast('Order created ✓'); location.hash = '#/orders/' + data;
   };
